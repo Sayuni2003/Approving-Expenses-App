@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Text,
   View,
@@ -8,13 +8,19 @@ import {
   Image,
   Alert,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { useEffect } from "react";
 import DropDownPicker from "react-native-dropdown-picker";
+import { apiPatch, apiPost, apiGet } from "@/src/services/api";
+import { auth } from "@/FirebaseConfig";
+import { uploadReceipt } from "@/src/services/uploadReceipt";
 
 const AddClaim = () => {
+  const { claimId } = useLocalSearchParams<{ claimId?: string }>();
+  const isEdit = !!claimId;
+
+  // ========= Form states =========
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -35,7 +41,7 @@ const AddClaim = () => {
     { label: "Miscellaneous", value: "Miscellaneous" },
   ]);
 
-  //Receipt states
+  // ========= Receipt states (MOVED UP) =========
   const [receiptImage, setReceiptImage] = useState<{
     uri: string;
     name?: string;
@@ -49,10 +55,63 @@ const AddClaim = () => {
     size?: number;
   } | null>(null);
 
+  // ========= Load claim in edit mode (now safe) =========
+  useEffect(() => {
+    if (!isEdit) return;
+
+    (async () => {
+      try {
+        const data = await apiGet(`/claims/${claimId}`);
+
+        setName(data.name ?? "");
+        setCategory(data.category ?? null);
+        setAmount(String(data.amount ?? ""));
+        setDescription(data.description ?? "");
+
+        // Show existing receipt as preview (optional)
+        const url = data?.proof?.url;
+        if (url) {
+          const lower = String(url).toLowerCase();
+          if (lower.endsWith(".pdf")) {
+            setReceiptPdf({
+              uri: url,
+              name: "Receipt.pdf",
+              mimeType: "application/pdf",
+            });
+            setReceiptImage(null);
+          } else {
+            setReceiptImage({
+              uri: url,
+              name: "receipt",
+              mimeType: "image/jpeg",
+            });
+            setReceiptPdf(null);
+          }
+        }
+      } catch (e: any) {
+        Alert.alert("Error", e?.message ?? "Failed to load claim");
+        router.back();
+      }
+    })();
+  }, [isEdit, claimId]);
+
+  // ========= Permissions =========
   useEffect(() => {
     ImagePicker.requestCameraPermissionsAsync();
     ImagePicker.requestMediaLibraryPermissionsAsync();
   }, []);
+
+  // Clear form when opening Add (not Edit) — handles router re-use of component
+  useEffect(() => {
+    if (isEdit) return;
+
+    setName("");
+    setCategory(null);
+    setAmount("");
+    setDescription("");
+    setReceiptImage(null);
+    setReceiptPdf(null);
+  }, [isEdit, claimId]);
 
   async function pickReceiptImage() {
     Alert.alert("Upload Receipt Photo", "Choose an option", [
@@ -69,42 +128,35 @@ const AddClaim = () => {
 
     if (!result.canceled) {
       const asset = result.assets[0];
+
       setReceiptImage({
         uri: asset.uri,
         name: asset.fileName ?? "receipt.jpg",
         mimeType: asset.mimeType ?? "image/jpeg",
       });
+
+      // ✅ clear pdf if picking image
+      setReceiptPdf(null);
     }
   }
 
   async function openGallery() {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // warning OK for now
       quality: 0.8,
     });
 
     if (!result.canceled) {
       const asset = result.assets[0];
+
       setReceiptImage({
         uri: asset.uri,
         name: asset.fileName ?? "receipt.jpg",
         mimeType: asset.mimeType ?? "image/jpeg",
       });
-    }
-  }
 
-  async function takeReceiptPhoto() {
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      setReceiptImage({
-        uri: asset.uri,
-        name: asset.fileName ?? "receipt.jpg",
-        mimeType: asset.mimeType ?? "image/jpeg",
-      });
+      // ✅ clear pdf if picking image
+      setReceiptPdf(null);
     }
   }
 
@@ -118,18 +170,115 @@ const AddClaim = () => {
     if (result.canceled) return;
 
     const file = result.assets[0];
+
     setReceiptPdf({
       uri: file.uri,
       name: file.name,
       mimeType: file.mimeType ?? "application/pdf",
       size: file.size,
     });
+
+    // ✅ clear image if picking pdf
+    setReceiptImage(null);
   }
 
-  function handleSubmit() {
-    // Later: upload receiptImage/receiptPdf to storage and save URLs in Firestore
-    // For now: just go back
-    router.back();
+  async function handleSubmit() {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert("Not logged in", "Please login again.");
+        return;
+      }
+
+      if (!category) {
+        Alert.alert("Missing Category", "Please select a category.");
+        return;
+      }
+
+      const amountNumber = Number(amount);
+      if (!amount || Number.isNaN(amountNumber) || amountNumber <= 0) {
+        Alert.alert("Invalid Amount", "Please enter a valid amount.");
+        return;
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+
+      // Pick ONE receipt (image OR pdf)
+      const receiptFile = receiptImage
+        ? {
+            uri: receiptImage.uri,
+            name: receiptImage.name ?? `receipt-${Date.now()}.jpg`,
+            contentType: receiptImage.mimeType ?? "image/jpeg",
+          }
+        : receiptPdf
+          ? {
+              uri: receiptPdf.uri,
+              name: receiptPdf.name ?? `receipt-${Date.now()}.pdf`,
+              contentType: receiptPdf.mimeType ?? "application/pdf",
+            }
+          : null;
+
+      // =========================
+      // EDIT MODE (PATCH)
+      // =========================
+      if (isEdit && claimId) {
+        await apiPatch(`/claims/${claimId}`, {
+          name,
+          category,
+          amount: amountNumber,
+          // ✅ improvement: don't overwrite date automatically when editing
+          description,
+        });
+
+        const isNewLocalFile =
+          receiptFile && receiptFile.uri && !receiptFile.uri.startsWith("http");
+
+        if (isNewLocalFile) {
+          const publicUrl = await uploadReceipt({
+            employeeId: user.uid,
+            claimId: String(claimId),
+            file: receiptFile!,
+          });
+
+          await apiPatch(`/claims/${claimId}/proof`, { proofUrl: publicUrl });
+        }
+
+        Alert.alert("Success", "Claim updated successfully!");
+        router.back();
+        return;
+      }
+
+      // =========================
+      // ADD MODE (POST)
+      // =========================
+      const createRes = await apiPost("/claims", {
+        employeeId: user.uid,
+        name,
+        category,
+        amount: amountNumber,
+        date: today,
+        description: description || "",
+        proofUrl: "",
+      });
+
+      const newClaimId = createRes.claimId;
+
+      if (receiptFile) {
+        const publicUrl = await uploadReceipt({
+          employeeId: user.uid,
+          claimId: newClaimId,
+          file: receiptFile,
+        });
+
+        await apiPatch(`/claims/${newClaimId}/proof`, { proofUrl: publicUrl });
+      }
+
+      Alert.alert("Success", "Claim submitted successfully!");
+      router.back();
+    } catch (err: any) {
+      console.log("submit error:", err);
+      Alert.alert("Error", err?.message ?? "Failed to submit claim");
+    }
   }
 
   return (
@@ -139,7 +288,7 @@ const AddClaim = () => {
       contentContainerStyle={{ paddingBottom: 40 }}
     >
       <Text className="text-3xl font-bold text-primary mb-6 mt-5">
-        Add New Claim
+        {isEdit ? "Edit Claim" : "Add New Claim"}
       </Text>
 
       <View className="bg-background rounded-xl p-4 space-y-4 mt-4 border border-white">
@@ -222,7 +371,7 @@ const AddClaim = () => {
             <View className="mt-3">
               <Image
                 source={{ uri: receiptImage.uri }}
-                className="w-full h-40 rounded-lg"
+                className="w-full h-24 rounded-md"
                 resizeMode="cover"
               />
               <View className="flex-row justify-between items-center mt-2">
@@ -281,7 +430,9 @@ const AddClaim = () => {
             className="flex-1 bg-primary rounded-lg py-3 items-center"
             onPress={handleSubmit}
           >
-            <Text className="text-white font-semibold">Submit</Text>
+            <Text className="text-white font-semibold">
+              {isEdit ? "Save Changes" : "Submit"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

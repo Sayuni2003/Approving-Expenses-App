@@ -43,3 +43,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+src/config/serviceAccountKey.json
+.env
+node_modules
+

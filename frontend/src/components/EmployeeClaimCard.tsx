@@ -1,64 +1,180 @@
 import React from "react";
-import { Text, View, TouchableOpacity } from "react-native";
-import { Pencil, Trash2 } from "lucide-react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
+import { Pencil, Trash2, FileText, Download } from "lucide-react-native";
+
+type ClaimStatus = "Approved" | "Rejected" | "Pending" | "Submitted";
+
+type Receipt =
+  | { type: "image"; url: string }
+  | { type: "pdf"; url: string; fileName?: string }
+  | null;
 
 interface Props {
+  status: ClaimStatus;
   name: string;
   category: string;
   amount: number;
-  description: string;
-  date: string;
-  status: "Approved" | "Rejected" | "Pending";
+  description?: string;
+  date: string; // "YYYY-MM-DD" or any display string
+  receipt?: Receipt;
+  comment?: string;
+
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onOpenReceipt?: (url: string) => void; // you can open with Linking.openURL
 }
 
-const statusColors = {
-  Approved: "bg-green-500",
-  Rejected: "bg-red-500",
-  Pending: "bg-blue",
-};
+function statusColor(status: ClaimStatus) {
+  switch (status) {
+    case "Approved":
+      return "#16a34a"; // green-600
+    case "Rejected":
+      return "#dc2626"; // red-600
+    case "Pending":
+    case "Submitted":
+    default:
+      return "#e6a519"; // yellow-600
+  }
+}
 
-const EmployeeClaimCard = ({
+export default function EmployeeClaimCard({
+  status,
   name,
   category,
   amount,
   description,
   date,
-  status,
-}: Props) => {
+  receipt = null,
+  comment,
+  onEdit,
+  onDelete,
+  onOpenReceipt,
+}: Props) {
   return (
-    <View className="bg-background rounded-xl p-4 mb-4 shadow-sm border border-">
-      {/* Status badge */}
-      <View
-        className={`self-start px-3 py-1 rounded-full ${statusColors[status]}`}
-      >
-        <Text className="text-white text-xs font-semibold">{status}</Text>
+    <View className="bg-background rounded-xl px-4 pt-4 pb-4 mb-4 shadow-sm border border-gray-200 relative">
+      {/* Title + actions */}
+      <View className="flex-row items-center justify-between">
+        <View className="flex-col flex-1 pr-2">
+          <View
+            style={{
+              backgroundColor: statusColor(status),
+              paddingHorizontal: 12,
+              paddingVertical: 4,
+              borderRadius: 999,
+              alignSelf: "flex-start",
+              marginTop: 8,
+            }}
+          >
+            <Text className="text-white text-xs font-semibold pt-6">
+              {status}
+            </Text>
+          </View>
+          <View className="mt-2 flex-1">
+            <Text
+              className="text-primary text-base font-bold"
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            <Text className="text-gray-500 text-xs mt-1">{date}</Text>
+          </View>
+        </View>
+
+        <View className="flex-row items-center gap-3">
+          <TouchableOpacity
+            onPress={onEdit}
+            className="p-2 rounded-lg bg-gray-100"
+            accessibilityLabel="Edit claim"
+          >
+            <Pencil size={18} color="#111827" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onDelete}
+            className="p-2 rounded-lg bg-gray-100"
+            accessibilityLabel="Delete claim"
+          >
+            <Trash2 size={18} color="#DC2626" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Main content */}
-      <View className="mt-3 space-y-1">
-        <Text className="text-lg font-bold text-primary">{name}</Text>
+      {/* Info rows */}
+      <View className="mt-4 space-y-2">
+        <View className="flex-row ">
+          <Text className="text-black text-sm font-semibold">Category: </Text>
+          <Text className="text-secondary text-sm ">{category}</Text>
+        </View>
 
-        <Text className="text-sm text-gray-600">Category: {category}</Text>
+        <View className="flex-row">
+          <Text className="text-black text-sm font-semibold">Amount: </Text>
+          <Text className="text-secondary text-sm ">
+            LKR {amount.toLocaleString()}
+          </Text>
+        </View>
 
-        <Text className="text-sm text-gray-600">Amount: Rs. {amount}</Text>
-
-        <Text className="text-sm text-gray-700">{description}</Text>
-
-        <Text className="text-xs text-gray-400 mt-1">{date}</Text>
+        {!!description?.trim() && (
+          <View className="mt-1">
+            <Text className="text-black text-sm font-semibold mb-1">
+              Description:
+            </Text>
+            <Text className="text-secondary text-sm leading-5">
+              {description}
+            </Text>
+          </View>
+        )}
       </View>
 
-      {/* Actions */}
-      <View className="flex-row justify-end mt-3 space-x-4">
-        <TouchableOpacity>
-          <Pencil size={20} color="#2563eb" />
-        </TouchableOpacity>
+      {/* Receipt */}
+      <View className="mt-4">
+        <Text className="text-black text-sm font-semibold mb-2">Receipt</Text>
 
-        <TouchableOpacity>
-          <Trash2 size={20} color="#dc2626" />
-        </TouchableOpacity>
+        {!receipt ? (
+          <Text className="text-gray-400 text-xs mb-4 ">
+            No receipt uploaded
+          </Text>
+        ) : receipt.type === "image" ? (
+          <TouchableOpacity
+            onPress={() => onOpenReceipt?.(receipt.url)}
+            className="rounded-lg overflow-hidden border border-gray-200 mb-4"
+            activeOpacity={0.85}
+          >
+            <Image
+              source={{ uri: receipt.url }}
+              className="w-full h-24 rounded-md"
+              resizeMode="cover"
+            />
+            <View className="flex-row items-center justify-between px-3 py-2 bg-gray-50">
+              <Text className="text-primary text-xs font-semibold">
+                View receipt image
+              </Text>
+              <Download size={16} color="#111827" />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => onOpenReceipt?.(receipt.url)}
+            className="flex-row items-center justify-between px-3 py-2 rounded-lg bg-gray-100 border border-gray-200 mb-4"
+            activeOpacity={0.85}
+          >
+            <View className="flex-row items-center gap-2 flex-1 pr-2">
+              <FileText size={18} color="#111827" />
+              <Text
+                className="text-primary text-sm font-semibold"
+                numberOfLines={1}
+              >
+                {receipt.fileName ?? "Receipt.pdf"}
+              </Text>
+            </View>
+            <Download size={18} color="#111827" />
+          </TouchableOpacity>
+        )}
       </View>
+      {status === "Rejected" && !!comment?.trim() && (
+        <Text className="text-red-600 text-xs font-semibold mt-1">
+          Reason: {comment}
+        </Text>
+      )}
     </View>
   );
-};
-
-export default EmployeeClaimCard;
+}
