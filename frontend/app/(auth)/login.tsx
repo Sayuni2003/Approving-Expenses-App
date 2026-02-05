@@ -4,6 +4,7 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  Image,
 } from "react-native";
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -38,6 +39,12 @@ const login = () => {
       keyboardShouldPersistTaps="handled"
     >
       <View className="flex-1 bg-background items-center justify-center px-6">
+        <Image
+          source={require("../../assets/images/spendCheck.png")}
+          className="w-36 h-36 mb-6"
+          resizeMode="contain"
+        />
+
         <Text className="text-3xl font-bold text-primary mb-10">Login</Text>
 
         {/* Email */}

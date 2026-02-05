@@ -8,6 +8,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  Image,
 } from "react-native";
 
 type Role = "Employee" | "Admin";
@@ -142,6 +143,12 @@ const Users = () => {
           )}
         </ScrollView>
       </View>
+
+      <Image
+        source={require("../../assets/images/soon.png")}
+        className="w-72 h-72 mb-12"
+        resizeMode="contain"
+      />
 
       <Modal visible={open} transparent animationType="fade">
         <Pressable className="flex-1 bg-black/40" onPress={closeModal} />

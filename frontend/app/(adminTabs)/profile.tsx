@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Text, TouchableOpacity, View, Image } from "react-native";
 import { logout } from "../../src/services/auth";
 import { signOut } from "firebase/auth";
 import { auth } from "../../FirebaseConfig";
@@ -21,10 +21,16 @@ const profile = () => {
     ]);
   };
   return (
-    <View className="flex-1 justify-center px-6 bg-background">
+    <View className="flex-1 bg-background justify-center items-center px-6">
+      <Image
+        source={require("../../assets/images/soon.png")}
+        className="w-72 h-72 mb-12"
+        resizeMode="contain"
+      />
+
       <TouchableOpacity
         onPress={handleLogout}
-        className="bg-primary py-4 rounded-xl items-center"
+        className="bg-primary py-4 rounded-xl items-center w-full"
       >
         <Text className="text-white font-bold text-lg">Logout</Text>
       </TouchableOpacity>
