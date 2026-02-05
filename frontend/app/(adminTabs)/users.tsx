@@ -8,10 +8,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
-  ActivityIndicator,
 } from "react-native";
-
-import { createUserApi } from "@/src/services/users";
 
 type Role = "Employee" | "Admin";
 
@@ -25,7 +22,6 @@ type UserRow = {
 
 const Users = () => {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -33,9 +29,15 @@ const Users = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [rows, setRows] = useState<UserRow[]>([]);
-
-  const backendRole = role === "Admin" ? "admin" : "employee";
+  const [rows, setRows] = useState<UserRow[]>([
+    {
+      id: "1",
+      firstName: "Sayuni",
+      lastName: "Manjusri",
+      email: "sayuni@example.com",
+      createdAt: new Date(),
+    },
+  ]);
 
   const fullName = useMemo(
     () => `${firstName.trim()} ${lastName.trim()}`.trim(),
@@ -51,7 +53,6 @@ const Users = () => {
   };
 
   const closeModal = () => {
-    if (loading) return;
     setOpen(false);
     resetForm();
   };
@@ -63,6 +64,7 @@ const Users = () => {
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "Enter a valid email.";
     if (!password) return "Password is required.";
     if (password.length < 6) return "Password must be at least 6 characters.";
+    if (!role) return "Role is required.";
     return null;
   };
 
@@ -73,34 +75,18 @@ const Users = () => {
       return;
     }
 
-    try {
-      setLoading(true);
+    const newRow: UserRow = {
+      id: String(Date.now()),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim().toLowerCase(),
+      createdAt: new Date(),
+    };
 
-      const created = await createUserApi({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        role: backendRole,
-        email: email.trim().toLowerCase(),
-        password,
-      });
+    setRows((prev) => [newRow, ...prev]);
 
-      const newRow: UserRow = {
-        id: created.uid,
-        firstName: created.firstName,
-        lastName: created.lastName,
-        email: created.email,
-        createdAt: new Date(),
-      };
-
-      setRows((prev) => [newRow, ...prev]);
-
-      Alert.alert("Success", `User created: ${fullName}`);
-      closeModal();
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to create user");
-    } finally {
-      setLoading(false);
-    }
+    Alert.alert("Success", `User created: ${fullName} (${role})`);
+    closeModal();
   };
 
   const formatDate = (d: Date) => {
@@ -175,6 +161,8 @@ const Users = () => {
             <TextInput
               value={firstName}
               onChangeText={setFirstName}
+              placeholder="e.g., Nimal"
+              placeholderTextColor="#9CA3AF"
               className="border border-gray-200 rounded-xl px-3 py-2 mb-3 text-secondary"
             />
 
@@ -182,36 +170,56 @@ const Users = () => {
             <TextInput
               value={lastName}
               onChangeText={setLastName}
+              placeholder="e.g., Perera"
+              placeholderTextColor="#9CA3AF"
               className="border border-gray-200 rounded-xl px-3 py-2 mb-3 text-secondary"
             />
 
             <Text className="text-secondary mb-1">Role</Text>
             <View className="flex-row gap-2 mb-3">
-              {(["Employee", "Admin"] as Role[]).map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  onPress={() => setRole(r)}
-                  className={`flex-1 rounded-xl px-3 py-2 border ${
-                    role === r
-                      ? "bg-primary border-primary"
-                      : "bg-white border-gray-200"
+              <TouchableOpacity
+                onPress={() => setRole("Employee")}
+                className={`flex-1 rounded-xl px-3 py-2 border ${
+                  role === "Employee"
+                    ? "bg-primary border-primary"
+                    : "bg-white border-gray-200"
+                }`}
+                activeOpacity={0.85}
+              >
+                <Text
+                  className={`text-center font-semibold ${
+                    role === "Employee" ? "text-white" : "text-secondary"
                   }`}
                 >
-                  <Text
-                    className={`text-center font-semibold ${
-                      role === r ? "text-white" : "text-secondary"
-                    }`}
-                  >
-                    {r}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                  Employee
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setRole("Admin")}
+                className={`flex-1 rounded-xl px-3 py-2 border ${
+                  role === "Admin"
+                    ? "bg-primary border-primary"
+                    : "bg-white border-gray-200"
+                }`}
+                activeOpacity={0.85}
+              >
+                <Text
+                  className={`text-center font-semibold ${
+                    role === "Admin" ? "text-white" : "text-secondary"
+                  }`}
+                >
+                  Admin
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <Text className="text-secondary mb-1">Email</Text>
             <TextInput
               value={email}
               onChangeText={setEmail}
+              placeholder="e.g., user@company.com"
+              placeholderTextColor="#9CA3AF"
               keyboardType="email-address"
               autoCapitalize="none"
               className="border border-gray-200 rounded-xl px-3 py-2 mb-3 text-secondary"
@@ -221,6 +229,8 @@ const Users = () => {
             <TextInput
               value={password}
               onChangeText={setPassword}
+              placeholder="Min 6 characters"
+              placeholderTextColor="#9CA3AF"
               secureTextEntry
               className="border border-gray-200 rounded-xl px-3 py-2 mb-4 text-secondary"
             />
@@ -229,6 +239,7 @@ const Users = () => {
               <TouchableOpacity
                 onPress={closeModal}
                 className="flex-1 border border-gray-200 rounded-xl py-3"
+                activeOpacity={0.85}
               >
                 <Text className="text-center font-semibold text-secondary">
                   Cancel
@@ -237,18 +248,12 @@ const Users = () => {
 
               <TouchableOpacity
                 onPress={onSubmit}
-                disabled={loading}
-                className={`flex-1 rounded-xl py-3 ${
-                  loading ? "bg-gray-400" : "bg-primary"
-                }`}
+                className="flex-1 bg-primary rounded-xl py-3"
+                activeOpacity={0.85}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text className="text-center font-semibold text-white">
-                    Create User
-                  </Text>
-                )}
+                <Text className="text-center font-semibold text-white">
+                  Create User
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

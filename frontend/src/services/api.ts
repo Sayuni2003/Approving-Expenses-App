@@ -1,53 +1,22 @@
+import { auth } from "@/FirebaseConfig";
+
 const BASE_URL = "http://10.64.86.152:5000";
 
-export async function apiGet(path: string) {
-  const res = await fetch(`${BASE_URL}${path}`);
+async function buildHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
 
-  const text = await res.text(); // read raw text first
-
-  if (!res.ok) {
-    console.log("RAW RESPONSE:", text);
-    throw new Error(`Request failed: ${res.status}`);
+  const user = auth.currentUser;
+  if (user) {
+    const token = await user.getIdToken();
+    headers.Authorization = `Bearer ${token}`;
   }
 
-  // Now safely parse JSON
-  return JSON.parse(text);
+  return headers;
 }
 
-export async function apiPost(path: string, body: any) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const text = await res.text();
-
-  if (!res.ok) {
-    console.log("RAW RESPONSE:", text);
-    throw new Error(`Request failed: ${res.status}`);
-  }
-
-  return JSON.parse(text);
-}
-
-export async function apiPatch(path: string, body: any) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    console.log("RAW RESPONSE:", text);
-    throw new Error(`Request failed: ${res.status}`);
-  }
-
-  return JSON.parse(text);
-}
-
-async function parseResponse(res: Response) {
+async function parse(res: Response) {
   const text = await res.text();
   try {
     return text ? JSON.parse(text) : null;
@@ -56,10 +25,49 @@ async function parseResponse(res: Response) {
   }
 }
 
-export async function apiDelete(path: string) {
-  const res = await fetch(`${BASE_URL}${path}`, { method: "DELETE" });
-  const data = await parseResponse(res);
+export async function apiGet(path: string) {
+  const headers = await buildHeaders();
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+  const data = await parse(res);
   if (!res.ok)
-    throw new Error(`Request failed: ${res.status} ${JSON.stringify(data)}`);
+    throw new Error(data?.message || `Request failed: ${res.status}`);
+  return data;
+}
+
+export async function apiPost(path: string, body: any) {
+  const headers = await buildHeaders();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const data = await parse(res);
+  if (!res.ok)
+    throw new Error(data?.message || `Request failed: ${res.status}`);
+  return data;
+}
+
+export async function apiPatch(path: string, body: any) {
+  const headers = await buildHeaders();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const data = await parse(res);
+  if (!res.ok)
+    throw new Error(data?.message || `Request failed: ${res.status}`);
+  return data;
+}
+
+export async function apiDelete(path: string) {
+  const headers = await buildHeaders();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "DELETE",
+    headers,
+  });
+  const data = await parse(res);
+  if (!res.ok)
+    throw new Error(data?.message || `Request failed: ${res.status}`);
   return data;
 }

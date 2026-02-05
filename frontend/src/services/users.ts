@@ -27,10 +27,6 @@ export async function createUserApi(payload: {
     throw new Error("Not logged in");
   }
 
-  console.log("Creating user with payload:", payload);
-  console.log("API_URL:", API_URL);
-  console.log("Token present:", !!token);
-
   const res = await fetch(`${API_URL}/users`, {
     method: "POST",
     headers: {
@@ -40,16 +36,7 @@ export async function createUserApi(payload: {
     body: JSON.stringify(payload),
   });
 
-  const text = await res.text();
-  console.log("Response status:", res.status);
-  console.log("Response text:", text);
-
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`Invalid response from server: ${text}`);
-  }
+  const data = await res.json();
 
   if (!res.ok) {
     throw new Error(data.message || "Failed to create user");

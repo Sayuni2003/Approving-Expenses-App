@@ -1,10 +1,9 @@
-import { Router } from "express";
-import { requireAuth } from "../middleware/requireAuth.js";
-import { requireAdmin } from "../middleware/requireAdmin.js";
-import { createUser } from "../controllers/userController.js";
+import express from "express";
+import { createUser, getUserRole } from "../controllers/userController.js";
 
-const router = Router();
+const router = express.Router();
 
-router.post("/", requireAuth, requireAdmin, createUser);
+router.post("/", createUser);
+router.get("/:uid/role", getUserRole);
 
 export default router;

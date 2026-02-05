@@ -1,64 +1,64 @@
-// src/controllers/userController.js
-import { admin } from "../config/firebaseAdmin.js";
+import { admin, db } from "../config/firebaseAdmin.js";
+import { createUserDoc } from "../models/userModel.js";
 
 export async function createUser(req, res) {
   try {
-    const { firstName, lastName, role, email, password } = req.body;
+    const { firstName, lastName, email, password, role } = req.body;
 
-    console.log("createUser called with:", {
-      firstName,
-      lastName,
-      role,
-      email,
-    });
-    console.log("Authenticated user uid:", req.user?.uid);
+    if (!firstName || !lastName || !email || !password || !role) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
 
-    // Basic validation
-    if (!firstName || !lastName)
-      return res.status(400).json({ message: "Name required" });
-    if (!email) return res.status(400).json({ message: "Email required" });
-    if (!password || password.length < 6)
+    if (!["admin", "employee"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    if (password.length < 6) {
       return res
         .status(400)
-        .json({ message: "Password must be at least 6 chars" });
-    if (!["admin", "employee"].includes(role))
-      return res.status(400).json({ message: "Invalid role" });
+        .json({ message: "Password must be at least 6 characters" });
+    }
 
     // 1) Create Firebase Auth user
-    console.log("Creating Firebase Auth user...");
     const userRecord = await admin.auth().createUser({
-      email,
+      email: email.trim().toLowerCase(),
       password,
-      displayName: `${firstName} ${lastName}`,
+      displayName: `${firstName.trim()} ${lastName.trim()}`.trim(),
     });
 
     const uid = userRecord.uid;
-    console.log("Firebase user created with uid:", uid);
 
-    // 2) Create Firestore profile doc
-    console.log("Creating Firestore profile...");
-    await admin.firestore().collection("users").doc(uid).set({
-      email,
-      firstName,
-      lastName,
-      role,
-      disabled: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      createdBy: req.user.uid,
-    });
-
-    console.log("User successfully created:", uid);
-
-    return res.status(201).json({
-      uid,
-      email,
-      firstName,
-      lastName,
+    // 2) Create Firestore user document
+    const userDoc = await createUserDoc(uid, {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim().toLowerCase(),
       role,
     });
-  } catch (e) {
-    console.log("Error creating user:", e.code, e.message);
-    // Common: auth/email-already-exists
-    return res.status(400).json({ message: e.message });
+
+    return res.status(201).json({ uid, ...userDoc });
+  } catch (err) {
+    console.log("createUser error:", err);
+
+    if (err?.code === "auth/email-already-exists") {
+      return res.status(409).json({ message: "Email already exists" });
+    }
+
+    return res.status(500).json({ message: err?.message ?? "Server error" });
+  }
+}
+
+export async function getUserRole(req, res) {
+  try {
+    const { uid } = req.params;
+
+    const doc = await db.collection("users").doc(uid).get();
+    if (!doc.exists) return res.status(404).json({ message: "User not found" });
+
+    const data = doc.data();
+    return res.json({ role: data.role });
+  } catch (err) {
+    console.log("getUserRole error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 }

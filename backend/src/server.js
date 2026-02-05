@@ -16,9 +16,6 @@ app.get("/", (req, res) => {
 });
 
 app.use("/claims", claimRoutes);
-console.log("userRoutes type:", typeof userRoutes);
-console.log("userRoutes keys:", userRoutes && Object.keys(userRoutes));
-
 app.use("/users", userRoutes);
 
 const PORT = process.env.PORT || 5000;
